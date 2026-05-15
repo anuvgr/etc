@@ -1,0 +1,13 @@
+<svg width="300" height="300" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Door Frame -->
+  <rect x="30" y="10" width="40" height="80" stroke="#333" stroke-width="4"/>
+  
+  <!-- Shadow/Interior -->
+  <path d="M70 70L85 80L85 85L70 85V70Z" fill="#333"/>
+  
+  <!-- Red Door (Open) -->
+  <path d="M30 10L65 15V85L30 90V10Z" fill="#ff2d2d"/>
+  
+  <!-- Door Handle -->
+  <circle cx="58" cy="50" r="2" fill="white"/>
+</svg>
