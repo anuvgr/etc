@@ -238,36 +238,47 @@ const PrintView = () => {
         </div>
       )}
 
-      {!isChallan && !isReceipt && !isLedger && (
-        <div className="totals" style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-          <table className="totals-table">
-            <tr>
-              <td>Subtotal</td>
-              <td>₹{data.subtotal.toLocaleString()}</td>
-            </tr>
-            {data.cgst > 0 && (
-              <>
-                <tr><td>CGST</td><td>₹{data.cgst.toLocaleString()}</td></tr>
-                <tr><td>SGST</td><td>₹{data.sgst.toLocaleString()}</td></tr>
-              </>
-            )}
-            {data.igst > 0 && (
-              <tr><td>IGST</td><td>₹{data.igst.toLocaleString()}</td></tr>
-            )}
-            {(data.discount && data.discount > 0) ? (
-              <tr><td style={{ color: '#ef4444' }}>Discount</td><td style={{ color: '#ef4444' }}>-₹{data.discount.toLocaleString()}</td></tr>
-            ) : null}
-            <tr style={{ borderTop: '2px solid #000' }}>
-              <td style={{ fontSize: '1.125rem' }}>Total</td>
-              <td style={{ fontSize: '1.125rem' }}>₹{data.total.toLocaleString()}</td>
-            </tr>
-          </table>
-          <div style={{ marginTop: '0.5rem', textAlign: 'right', fontSize: '0.875rem', maxWidth: '400px' }}>
-            <strong>Amount in Words:</strong> <br/>
-            <span style={{ textTransform: 'capitalize', fontStyle: 'italic' }}>{numberToWords(data.total)}</span>
+      {!isChallan && !isReceipt && !isLedger && (() => {
+        const expectedTotal = data.subtotal + (data.cgst || 0) + (data.sgst || 0) + (data.igst || 0) - (data.discount || 0);
+        const roundOff = data.total - expectedTotal;
+
+        return (
+          <div className="totals" style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+            <table className="totals-table">
+              <tr>
+                <td>Subtotal</td>
+                <td>₹{data.subtotal.toLocaleString()}</td>
+              </tr>
+              {data.cgst > 0 && (
+                <>
+                  <tr><td>CGST</td><td>₹{data.cgst.toLocaleString()}</td></tr>
+                  <tr><td>SGST</td><td>₹{data.sgst.toLocaleString()}</td></tr>
+                </>
+              )}
+              {data.igst > 0 && (
+                <tr><td>IGST</td><td>₹{data.igst.toLocaleString()}</td></tr>
+              )}
+              {(data.discount && data.discount > 0) ? (
+                <tr><td style={{ color: '#ef4444' }}>Discount</td><td style={{ color: '#ef4444' }}>-₹{data.discount.toLocaleString()}</td></tr>
+              ) : null}
+              {Math.abs(roundOff) > 0.01 && (
+                <tr>
+                  <td>Round Off</td>
+                  <td>{roundOff > 0 ? '+' : ''}₹{roundOff.toFixed(2)}</td>
+                </tr>
+              )}
+              <tr style={{ borderTop: '2px solid #000' }}>
+                <td style={{ fontSize: '1.125rem' }}>Total</td>
+                <td style={{ fontSize: '1.125rem' }}>₹{data.total.toLocaleString()}</td>
+              </tr>
+            </table>
+            <div style={{ marginTop: '0.5rem', textAlign: 'right', fontSize: '0.875rem', maxWidth: '400px' }}>
+              <strong>Amount in Words:</strong> <br/>
+              <span style={{ textTransform: 'capitalize', fontStyle: 'italic' }}>{numberToWords(data.total)}</span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {!isThermal && (
         <div className="signature">

@@ -79,7 +79,9 @@ const InvoiceForm = ({ type = 'invoice', onClose, onSuccess, initialData = null 
   const cgst = isIGST ? 0 : totalTax / 2;
   const sgst = isIGST ? 0 : totalTax / 2;
   const igst = isIGST ? totalTax : 0;
-  const total = subtotal + totalTax - calculatedDiscount;
+  const rawTotal = subtotal + totalTax - calculatedDiscount;
+  const total = Math.round(rawTotal);
+  const roundOff = total - rawTotal;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -177,6 +179,12 @@ const InvoiceForm = ({ type = 'invoice', onClose, onSuccess, initialData = null 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#10b981' }}>
                   <span>Discount {discountType === 'percentage' ? `(${discountInput}%)` : ''}:</span>
                   <span style={{ fontWeight: '600' }}>-₹{calculatedDiscount.toFixed(2)}</span>
+                </div>
+              )}
+              {Math.abs(roundOff) > 0.001 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>
+                  <span>Round Off:</span>
+                  <span style={{ fontWeight: '600' }}>{roundOff > 0 ? '+' : ''}₹{roundOff.toFixed(2)}</span>
                 </div>
               )}
               <div style={{ borderTop: '1px solid var(--border)', margin: '0.75rem 0' }}></div>
