@@ -138,7 +138,9 @@ const Products = () => {
           fetchProducts();
         } catch (apiErr) {
           console.error('API bulk upload error:', apiErr);
-          alert(apiErr.response?.data?.error || 'Server rejected the import. Please check if HSN codes or numbers are correctly formatted.');
+          const errorMsg = apiErr.response?.data?.error || 
+                           (apiErr.response ? `Server Error (${apiErr.response.status}): ${apiErr.response.statusText || 'Internal Server Error'}` : `Network Error: Could not connect to the backend server.`);
+          alert(`Failed to import inventory:\n\n${errorMsg}`);
         }
       }
     };
