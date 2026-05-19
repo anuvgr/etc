@@ -58,6 +58,52 @@ const Products = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory");
     XLSX.writeFile(workbook, `Inventory_Backup_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+  
+  const normalizeHeaders = (row) => {
+    const normalized = {};
+    const mappings = {
+      part_number: ['part_number', 'part number', 'partno', 'pn', 'part_no', 'part #'],
+      name: ['name', 'description', 'item description', 'item', 'item_description', 'title'],
+      hsn_code: ['hsn_code', 'hsn code', 'hsn', 'hsn_no', 'hsn number'],
+      unit: ['unit', 'uom', 'measure'],
+      purchase_price: ['purchase_price', 'purchase price', 'rate', 'purchase rate', 'buying price', 'buy price', 'cost'],
+      sales_price: ['sales_price', 'sales price', 'selling price', 'selling rate', 'price', 'sell price', 'sales rate'],
+      tax_rate: ['tax_rate', 'tax', 'tax rate', 'gst', 'gst rate', 'tax_%', 'gst_%'],
+      stock: ['stock', 'quantity', 'qty', 'initial stock', 'opening stock', 'stock quantity'],
+      category: ['category', 'type', 'group']
+    };
+
+    for (const [key, value] of Object.entries(row)) {
+      const cleanKey = String(key).toLowerCase().trim().replace(/[\s_-]+/g, '_');
+      let matched = false;
+      
+      for (const [dbKey, aliases] of Object.entries(mappings)) {
+        if (aliases.includes(cleanKey) || aliases.some(alias => cleanKey.includes(alias.replace(/[\s_-]+/g, '_')))) {
+          normalized[dbKey] = value;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        normalized[cleanKey] = value;
+      }
+    }
+    
+    // Normalize data types and set fallbacks
+    if (normalized.part_number !== undefined) normalized.part_number = String(normalized.part_number).trim();
+    if (normalized.name !== undefined) normalized.name = String(normalized.name).trim();
+    if (normalized.hsn_code !== undefined) normalized.hsn_code = String(normalized.hsn_code).trim();
+    
+    normalized.stock = normalized.stock !== undefined ? (Number(normalized.stock) || 0) : 0;
+    normalized.purchase_price = normalized.purchase_price !== undefined ? (Number(normalized.purchase_price) || 0) : 0;
+    normalized.sales_price = normalized.sales_price !== undefined ? (Number(normalized.sales_price) || 0) : 0;
+    normalized.tax_rate = normalized.tax_rate !== undefined ? (Number(normalized.tax_rate) || 18) : 18;
+    
+    if (!normalized.unit) normalized.unit = 'Nos';
+    if (!normalized.category) normalized.category = activeTab || 'Part';
+
+    return normalized;
+  };
 
   const handleImport = (e) => {
     const file = e.target.files[0];
@@ -65,23 +111,38 @@ const Products = () => {
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
+      let parsedData = [];
       try {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const dataBytes = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(dataBytes, { type: 'array' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const rawRows = XLSX.utils.sheet_to_json(ws);
+        
+        parsedData = rawRows.map(row => normalizeHeaders(row)).filter(row => row.part_number && row.name);
+        
+        if (parsedData.length === 0) {
+          alert('No valid items found. Please ensure the Excel sheet has at least a "Part Number" (or "P/N") and "Description" (or "Name") for each row.');
+          return;
+        }
+      } catch (parseErr) {
+        console.error('Excel parse error:', parseErr);
+        alert('Failed to read or parse the Excel file. Please ensure it is a valid spreadsheet (.xlsx, .xls, or .csv).');
+        return;
+      }
 
-        if (window.confirm(`Found ${data.length} items. Proceed with bulk update/import?`)) {
-          await client.post('/products/bulk', data);
+      if (window.confirm(`Found ${parsedData.length} valid items matching inventory columns. Proceed with bulk update/import?`)) {
+        try {
+          await client.post('/products/bulk', parsedData);
           alert('Inventory updated successfully!');
           fetchProducts();
+        } catch (apiErr) {
+          console.error('API bulk upload error:', apiErr);
+          alert(apiErr.response?.data?.error || 'Server rejected the import. Please check if HSN codes or numbers are correctly formatted.');
         }
-      } catch (err) {
-        alert('Error parsing Excel file.');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const filteredProducts = products.filter(p => {
