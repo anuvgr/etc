@@ -335,7 +335,14 @@ app.post('/api/products/bulk', authenticateToken, (req, res) => {
     `);
     for (const p of prods) {
       stmt.run({
-        ...p,
+        name: p.name || '',
+        part_number: p.part_number !== undefined ? String(p.part_number).trim() : null,
+        hsn_code: p.hsn_code !== undefined && p.hsn_code !== null ? String(p.hsn_code).trim() : null,
+        unit: p.unit !== undefined && p.unit !== null ? String(p.unit).trim() : 'Nos',
+        purchase_price: p.purchase_price !== undefined && p.purchase_price !== null ? (Number(p.purchase_price) || 0) : 0,
+        sales_price: p.sales_price !== undefined && p.sales_price !== null ? (Number(p.sales_price) || 0) : 0,
+        tax_rate: p.tax_rate !== undefined && p.tax_rate !== null ? (Number(p.tax_rate) || 18) : 18,
+        stock: p.stock !== undefined && p.stock !== null ? (Number(p.stock) || 0) : 0,
         category: p.category || 'Part'
       });
     }
