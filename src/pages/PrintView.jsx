@@ -108,7 +108,7 @@ const PrintView = () => {
 
       <div className="header">
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <img src="/logo.png" alt="Logo" style={{ height: '70px', marginRight: '1rem', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
+          <img src="/logo.jpg" alt="Logo" style={{ height: '70px', marginRight: '1rem', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
           <div className="company-info">
             <h1>Ephphatha Construction Trading Co.</h1>
             <p>Industrial Estate, Lane 4, Ernakulam, Kerala</p>

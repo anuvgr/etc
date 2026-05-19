@@ -27,10 +27,12 @@ const Login = () => {
   return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
       <div className="card glass" style={{ width: '100%', maxWidth: '400px', padding: '2rem' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <HardHat size={48} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-          <h1>Ephphatha Billing</h1>
-          <p className="text-muted">Construction Trading Company</p>
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <div style={{ width: '70px', height: '70px', margin: '0 auto 1.25rem', background: '#fff', borderRadius: '12px', padding: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src="/logo.jpg" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>Ephphatha Billing</h1>
+          <p className="text-muted" style={{ fontSize: '0.9rem' }}>Construction Trading Company</p>
         </div>
 
         {error && <div style={{ color: '#ef4444', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
