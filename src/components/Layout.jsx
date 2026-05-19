@@ -220,7 +220,7 @@ const Layout = ({ children }) => {
             </button>
             <div>
               <h1 className="header-title">Construction Management</h1>
-              <p className="text-muted" style={{ fontSize: '0.875rem' }}>Welcome, {user?.username}</p>
+              <p className="text-muted" style={{ fontSize: '0.875rem' }}>Welcome, {user?.displayName || user?.email || 'User'}</p>
             </div>
           </div>
 

@@ -6,6 +6,7 @@ import InvoiceForm from '../components/InvoiceForm';
 import { useAuth } from '../context/AuthContext';
 import { useFY } from '../context/FYContext';
 
+
 const STATUS_OPTIONS = ['All', 'Pending', 'Cash', 'Credit', 'Paid'];
 
 const STATUS_COLORS = {
@@ -27,6 +28,7 @@ const Invoices = () => {
   const [showAll, setShowAll] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All');
 
+
   useEffect(() => {
     fetchInvoices();
   }, [fromDate, toDate, showAll, statusFilter]);
@@ -35,12 +37,8 @@ const Invoices = () => {
     setLoading(true);
     try {
       const params = {};
-      if (showAll) {
-        params.all = 'true';
-      } else if (fromDate && toDate) {
-        params.from = fromDate;
-        params.to = toDate;
-      }
+      if (showAll) params.all = 'true';
+      else if (fromDate && toDate) { params.from = fromDate; params.to = toDate; }
       if (statusFilter !== 'All') params.status = statusFilter;
       const { data } = await client.get('/invoices', { params });
       setInvoices(data);
@@ -50,7 +48,6 @@ const Invoices = () => {
       setLoading(false);
     }
   };
-
   const clearFilters = () => {
     setFromDate('');
     setToDate('');
@@ -192,6 +189,7 @@ const Invoices = () => {
               <th style={{ width: '45px' }}>#</th>
               <th>Invoice #</th>
               <th>Customer</th>
+              <th>Items</th>
               <th>Date</th>
               <th>Total Amount</th>
               <th>Status</th>
@@ -206,6 +204,9 @@ const Invoices = () => {
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{index + 1}</td>
                   <td style={{ fontWeight: '600' }}>{invoice.invoice_number}</td>
                   <td>{invoice.customer_name}</td>
+                  <td style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-muted)', fontSize: '0.85rem' }} title={invoice.product_names}>
+                    {invoice.product_names || '-'}
+                  </td>
                   <td>{formatDate(invoice.date)}</td>
                   <td style={{ fontWeight: '600', color: 'var(--primary)' }}>₹{invoice.total.toLocaleString()}</td>
                   <td>

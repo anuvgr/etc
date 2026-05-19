@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import client from '../api/client';
 import ReactDOM from 'react-dom';
-import { Package, Plus, Search, AlertTriangle, Download, Upload, FileSpreadsheet, X } from 'lucide-react';
+import { Package, Plus, Search, AlertTriangle, Download, Upload, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const Products = () => {
@@ -30,6 +30,7 @@ const Products = () => {
 
   const fetchProducts = async () => {
     try {
+      setLoading(true);
       const { data } = await client.get('/products');
       setProducts(data);
     } catch (err) {
@@ -41,16 +42,13 @@ const Products = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Frontend: Attempting to save product', formData);
     try {
-      const response = await client.post('/products', formData);
-      console.log('Frontend: Save successful', response.data);
+      await client.post('/products', formData);
       setShowModal(false);
       fetchProducts();
       setFormData({ name: '', part_number: '', hsn_code: '', unit: 'Nos', purchase_price: '', sales_price: '', tax_rate: 18, stock: '', category: activeTab });
     } catch (err) {
-      console.error('Frontend: Save failed', err);
-      alert('Failed to add product: ' + (err.response?.data?.error || err.message));
+      alert(err.response?.data?.error || 'Failed to save product');
     }
   };
 
@@ -80,7 +78,7 @@ const Products = () => {
           fetchProducts();
         }
       } catch (err) {
-        alert('Error parsing Excel file. Please ensure it follows the correct format.');
+        alert('Error parsing Excel file.');
       }
     };
     reader.readAsBinaryString(file);
@@ -94,7 +92,7 @@ const Products = () => {
   });
 
   return (
-    <div className="animate-in">
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)', padding: '0.4rem', borderRadius: '10px' }}>
           {['Part', 'JCB', 'Hitachi', 'Sany', 'Kobelco', 'Yanmar', 'Other'].map(cat => (
@@ -102,92 +100,45 @@ const Products = () => {
               key={cat}
               className={`btn ${activeTab === cat ? 'btn-primary' : 'btn-outline'}`}
               onClick={() => setActiveTab(cat)}
-              style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', minWidth: '90px' }}
+              style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
             >
-              {cat === 'Part' ? 'Construction Parts' : cat}
+              {cat}
             </button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-outline" onClick={handleExport} title="Export to Excel">
-            Export
-          </button>
-          <button className="btn btn-primary" onClick={() => {
-            setFormData(prev => ({ ...prev, category: activeTab }));
-            setShowModal(true);
-          }}>
-            Add {activeTab === 'Part' ? 'Part' : activeTab}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '400px' }}>
-            <input
-              type="text"
-              className="input"
-              style={{ paddingLeft: '1rem' }}
-              placeholder={`Search in ${activeTab === 'Part' ? 'Parts' : 'Machines'}...`}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <button className="btn btn-outline" onClick={() => fileInputRef.current.click()} title="Import from Excel">
-            Import Excel
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            accept=".xlsx, .xls"
-            onChange={handleImport}
-          />
+          <button className="btn btn-outline" onClick={handleExport}>Export</button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>Add {activeTab}</button>
         </div>
       </div>
 
       <div className="card glass">
+        <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text" className="input" style={{ paddingLeft: '2.5rem' }}
+            placeholder="Search items..."
+            value={search} onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
         <table>
           <thead>
             <tr>
-              <th style={{ width: '50px' }}>#</th>
               <th>Part Number</th>
               <th>Description</th>
-              <th>HSN</th>
-              <th>Purchase Price</th>
-              <th>Sales Price</th>
               <th>Stock</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {filteredProducts.map((product, index) => (
+            {filteredProducts.map(product => (
               <tr key={product.id}>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{index + 1}</td>
-                <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{product.part_number}</td>
+                <td style={{ fontWeight: '600' }}>{product.part_number}</td>
+                <td>{product.name}</td>
+                <td>{product.stock}</td>
                 <td>
-                  <div>{product.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Unit: {product.unit}</div>
-                </td>
-                <td>{product.hsn_code}</td>
-                <td>₹{product.purchase_price.toLocaleString()}</td>
-                <td style={{ fontWeight: '700' }}>₹{product.sales_price.toLocaleString()}</td>
-                <td>
-                  <span style={{
-                    fontWeight: '700',
-                    color: product.stock <= 5 ? '#ef4444' : 'inherit'
-                  }}>
-                    {product.stock}
-                  </span>
-                </td>
-                <td>
-                  {product.stock <= 5 ? (
-                    <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
-                      <AlertTriangle size={14} /> Low Stock
-                    </span>
-                  ) : (
-                    <span style={{ color: '#10b981', fontSize: '0.75rem' }}>In Stock</span>
-                  )}
+                  {product.stock <= 5 ? <span style={{ color: '#ef4444' }}>Low Stock</span> : <span style={{ color: '#10b981' }}>In Stock</span>}
                 </td>
               </tr>
             ))}
@@ -198,84 +149,32 @@ const Products = () => {
       {showModal && ReactDOM.createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-          padding: '1rem'
+          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
         }}>
-          <div className="card glass animate-in" style={{ width: '100%', maxWidth: '1000px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-            <button
-              onClick={() => setShowModal(false)}
-              style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-            >
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1.5rem' }}>Add {formData.category === 'Part' ? 'Construction Part' : 'Machine Asset'}</h2>
+          <div className="card glass" style={{ width: '100%', maxWidth: '600px' }}>
+            <h2 style={{ marginBottom: '1.5rem' }}>Add {activeTab}</h2>
             <form onSubmit={handleSubmit}>
+              <div className="input-group">
+                <label className="label">Part Number</label>
+                <input type="text" className="input" required value={formData.part_number} onChange={(e) => setFormData({...formData, part_number: e.target.value, category: activeTab})} />
+              </div>
+              <div className="input-group">
+                <label className="label">Description</label>
+                <input type="text" className="input" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="input-group">
-                  <label className="label">Part Number (Unique)</label>
-                  <input
-                    type="text" className="input" required
-                    value={formData.part_number} onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
-                  />
+                  <label className="label">HSN</label>
+                  <input type="text" className="input" required value={formData.hsn_code} onChange={(e) => setFormData({...formData, hsn_code: e.target.value})} />
                 </div>
                 <div className="input-group">
-                  <label className="label">HSN Code</label>
-                  <input
-                    type="text" className="input" required
-                    value={formData.hsn_code} onChange={(e) => setFormData({ ...formData, hsn_code: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="input-group">
-                <label className="label">Item Category / Brand</label>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
-                  {['Part', 'JCB', 'Hitachi', 'Sany', 'Kobelco', 'Yanmar', 'Other'].map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, category: cat })}
-                      className={`btn ${formData.category === cat ? 'btn-primary' : 'btn-outline'}`}
-                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', minWidth: '80px' }}
-                    >
-                      {cat === 'Part' ? 'Construction Part' : cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="input-group">
-                <label className="label">Product Description</label>
-                <input
-                  type="text" className="input" required
-                  placeholder={formData.category !== 'Part' ? `e.g. ${formData.category} Excavator Filter` : 'e.g. Hydraulic Seal Kit'}
-                  value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                <div className="input-group">
-                  <label className="label">Purchase Price</label>
-                  <input
-                    type="number" className="input" required
-                    value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
-                  />
-                </div>
-                <div className="input-group">
-                  <label className="label">Sales Price</label>
-                  <input
-                    type="number" className="input" required
-                    value={formData.sales_price} onChange={(e) => setFormData({ ...formData, sales_price: e.target.value })}
-                  />
-                </div>
-                <div className="input-group">
-                  <label className="label">Stock Level</label>
-                  <input
-                    type="number" className="input" required
-                    value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                  />
+                  <label className="label">Stock</label>
+                  <input type="number" className="input" required value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Product</button>
-                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
+                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)} style={{ flex: 1 }}>Cancel</button>
               </div>
             </form>
           </div>

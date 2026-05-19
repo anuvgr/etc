@@ -18,6 +18,8 @@ const PrintView = () => {
         else if (type === 'receipt') endpoint = `/payments/${id}`;
         else if (type === 'sales-return') endpoint = `/sales-returns/${id}`;
         else if (type === 'purchase-return') endpoint = `/purchase-returns/${id}`;
+        else if (type === 'ledger') endpoint = `/customers/${id}/ledger`;
+        else if (type === 'supplier-ledger') endpoint = `/suppliers/${id}/ledger`;
         
         const { data } = await client.get(endpoint);
         setData(data);
@@ -49,6 +51,8 @@ const PrintView = () => {
   const isReceipt = type === 'receipt';
   const isSalesReturn = type === 'sales-return';
   const isPurchaseReturn = type === 'purchase-return';
+  const isLedger = type === 'ledger' || type === 'supplier-ledger';
+  const isSupplierLedger = type === 'supplier-ledger';
 
   return (
     <div className={`print-container ${type}`}>
@@ -119,21 +123,23 @@ const PrintView = () => {
             type === 'challan' ? 'Delivery Challan' : 
             type === 'receipt' ? 'Payment Receipt' : 
             type === 'sales-return' ? 'Credit Note (Sales Return)' : 
-            type === 'purchase-return' ? 'Debit Note (Purchase Return)' : ''
+            type === 'purchase-return' ? 'Debit Note (Purchase Return)' : 
+            type === 'ledger' ? 'Statement of Account (Customer)' : 
+            type === 'supplier-ledger' ? 'Statement of Account (Supplier)' : ''
           }</h2>
-          <p style={{ fontWeight: '700' }}>#{data.return_number || data.invoice_number || data.quote_number || data.id}</p>
-          <p>Date: {formatDate(data.date)}</p>
+          {!isLedger && <p style={{ fontWeight: '700' }}>#{data.return_number || data.invoice_number || data.quote_number || data.id}</p>}
+          <p>Date: {!isLedger ? formatDate(data.date) : formatDate(new Date().toISOString().split('T')[0])}</p>
         </div>
       </div>
 
       {!isThermal && (
         <div className="client-info">
           <div>
-            <p style={{ textTransform: 'uppercase', color: '#666', fontSize: '0.7rem', fontWeight: '800' }}>{isPurchaseReturn ? 'Return To:' : 'Bill To:'}</p>
-            <p style={{ fontWeight: '700', fontSize: '1rem' }}>{data.company_name || data.customer_name || data.supplier_name}</p>
-            <p>{data.address}</p>
-            <p>GSTIN: {data.gstin || 'UNREGISTERED'}</p>
-            <p>Ph: {data.phone}</p>
+            <p style={{ textTransform: 'uppercase', color: '#666', fontSize: '0.7rem', fontWeight: '800' }}>{isPurchaseReturn ? 'Return To:' : isSupplierLedger ? 'Supplier:' : isLedger ? 'Customer:' : 'Bill To:'}</p>
+            <p style={{ fontWeight: '700', fontSize: '1rem' }}>{isSupplierLedger ? data.supplier.name : isLedger ? data.customer.name : (data.company_name || data.customer_name || data.supplier_name)}</p>
+            <p>{isSupplierLedger ? data.supplier.address : isLedger ? data.customer.address : data.address}</p>
+            <p>GSTIN: {(isSupplierLedger ? data.supplier.gstin : isLedger ? data.customer.gstin : data.gstin) || 'UNREGISTERED'}</p>
+            <p>Ph: {isSupplierLedger ? data.supplier.phone : isLedger ? data.customer.phone : data.phone}</p>
           </div>
           <div style={{ textAlign: 'right' }}>
              <div style={{ textAlign: 'left', display: 'inline-block', maxWidth: '300px' }}>
@@ -158,6 +164,34 @@ const PrintView = () => {
         </div>
       )}
 
+      {isLedger && (
+         <table className="print-table">
+           <thead>
+             <tr><th>Date</th><th>Type</th><th>Ref</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
+           </thead>
+           <tbody>
+             {data.ledger?.map((tx, i) => (
+               <tr key={i}>
+                 <td>{formatDate(tx.date)}</td>
+                 <td>{tx.type}</td>
+                 <td>{tx.ref}</td>
+                 <td>{tx.debit || '-'}</td>
+                 <td>{tx.credit || '-'}</td>
+                 <td style={{ fontWeight: '600' }}>{tx.balance}</td>
+               </tr>
+             ))}
+           </tbody>
+           <tfoot>
+             <tr>
+               <td colSpan="5" style={{ textAlign: 'right', fontWeight: 'bold' }}>Closing Balance:</td>
+               <td style={{ fontWeight: 'bold' }}>
+                 ₹{Math.abs(data.closingBalance).toLocaleString()} {data.closingBalance > 0 ? '(Dr)' : data.closingBalance < 0 ? '(Cr)' : ''}
+               </td>
+             </tr>
+           </tfoot>
+         </table>
+       )}
+
       {isThermal && (
         <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
           <p>Customer: {data.customer_name}</p>
@@ -165,7 +199,7 @@ const PrintView = () => {
         </div>
       )}
 
-      {!isReceipt ? (
+      {(!isReceipt && !isLedger) && (
         <table className="print-table">
           <thead>
             <tr>
@@ -193,7 +227,9 @@ const PrintView = () => {
             ))}
           </tbody>
         </table>
-      ) : (
+      )}
+
+      {isReceipt && (
         <div style={{ padding: '2rem', border: '1px solid #eee', marginBottom: '2rem', textAlign: 'center' }}>
           <p style={{ fontSize: '1.25rem' }}>Received with thanks the sum of</p>
           <h2 style={{ fontSize: '2rem', margin: '1rem 0' }}>₹{data.amount.toLocaleString()}</h2>
@@ -202,7 +238,7 @@ const PrintView = () => {
         </div>
       )}
 
-      {!isChallan && !isReceipt && (
+      {!isChallan && !isReceipt && !isLedger && (
         <div className="totals" style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
           <table className="totals-table">
             <tr>

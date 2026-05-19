@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 import { formatDate } from '../utils/format';
-import { Search, Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Save, X, AlertCircle } from 'lucide-react';
 
 const SalesReturnForm = ({ onSave, onCancel }) => {
   const [invoices, setInvoices] = useState([]);
@@ -21,7 +21,7 @@ const SalesReturnForm = ({ onSave, onCancel }) => {
       const { data } = await client.get('/invoices');
       setInvoices(data);
     } catch (err) {
-      console.error('Failed to fetch invoices', err);
+      console.error(err);
     }
   };
 
@@ -31,212 +31,120 @@ const SalesReturnForm = ({ onSave, onCancel }) => {
       setItems([]);
       return;
     }
-
     const inv = invoices.find(i => i.id === parseInt(invoiceId));
     setSelectedInvoice(inv);
-    
     try {
       const { data } = await client.get(`/invoices/${invoiceId}/items`);
-      // Map invoice items to return items
-      const returnItems = data.map(item => ({
-        ...item,
-        invoice_item_id: item.id,
-        return_qty: 0,
-        max_qty: item.quantity // Can't return more than sold
-      }));
-      setItems(returnItems);
+      setItems(data.map(item => ({ ...item, return_qty: 0, max_qty: item.quantity })));
     } catch (err) {
-      console.error('Failed to fetch invoice items', err);
+      console.error(err);
     }
   };
 
-  const handleQtyChange = (idx, val) => {
-    const newItems = [...items];
-    const qty = parseFloat(val) || 0;
-    if (qty > newItems[idx].max_qty) {
-      setError(`Cannot return more than sold (${newItems[idx].max_qty})`);
-      return;
-    }
-    setError('');
-    newItems[idx].return_qty = qty;
-    setItems(newItems);
-  };
-
-  const calculateTotals = () => {
-    return items.reduce((acc, item) => {
-      const subtotal = item.return_qty * item.unit_price;
-      const cgst = (subtotal * (item.gst_rate / 2)) / 100;
-      const sgst = (subtotal * (item.gst_rate / 2)) / 100;
-      return {
-        subtotal: acc.subtotal + subtotal,
-        cgst: acc.cgst + cgst,
-        sgst: acc.sgst + sgst,
-        total: acc.total + subtotal + cgst + sgst
-      };
-    }, { subtotal: 0, cgst: 0, sgst: 0, total: 0 });
-  };
-
-  const totals = calculateTotals();
+  const totals = items.reduce((acc, item) => {
+    const amt = item.return_qty * item.unit_price;
+    return acc + amt + (amt * (item.gst_rate || 18) / 100);
+  }, 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedInvoice) return setError('Please select an invoice');
-    if (items.every(i => i.return_qty === 0)) return setError('Please return at least one item');
-
-    setLoading(true);
     try {
+      let subtotal = 0;
+      let cgst = 0;
+      let sgst = 0;
+      let igst = 0;
+      
+      const filteredItems = items.filter(i => i.return_qty > 0);
+      if (filteredItems.length === 0) return alert('Please enter at least one quantity to return.');
+
+      filteredItems.forEach(item => {
+        const amt = item.return_qty * item.unit_price;
+        subtotal += amt;
+        const taxRate = item.gst_rate || 18;
+        cgst += amt * (taxRate / 2) / 100;
+        sgst += amt * (taxRate / 2) / 100;
+      });
+
+      const total = subtotal + cgst + sgst;
+
       const payload = {
         invoice_id: selectedInvoice.id,
         customer_id: selectedInvoice.customer_id,
         date: returnDate,
         reason,
-        subtotal: totals.subtotal,
-        cgst: totals.cgst,
-        sgst: totals.sgst,
-        total: totals.total,
-        items: items.filter(i => i.return_qty > 0).map(i => ({
-          product_id: i.product_id,
-          quantity: i.return_qty,
-          unit_price: i.unit_price,
-          gst_rate: i.gst_rate
-        }))
+        subtotal,
+        cgst,
+        sgst,
+        igst,
+        total,
+        items: filteredItems
       };
-
       await client.post('/sales-returns', payload);
       onSave();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save return');
-    } finally {
-      setLoading(false);
+      alert('Failed to save return: ' + (err.response?.data?.error || err.message));
     }
   };
 
   return (
-    <div className="card glass animate-in">
+    <div className="card glass">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: '700' }}>New Sales Return (Credit Note)</h2>
-        <button onClick={onCancel} className="btn btn-outline" style={{ padding: '0.5rem' }}><X size={18} /></button>
+        <h2>New Sales Return</h2>
+        <button onClick={onCancel}><X /></button>
       </div>
-
-      {error && (
-        <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-          <div className="input-group">
-            <label className="label">Select Invoice</label>
-            <select 
-              className="input" 
-              onChange={(e) => handleInvoiceChange(e.target.value)}
-              required
-            >
-              <option value="">-- Choose Invoice --</option>
-              {invoices.map(inv => (
-                <option key={inv.id} value={inv.id}>
-                  {inv.invoice_number} - {inv.customer_name} ({formatDate(inv.date)})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="input-group">
-            <label className="label">Return Date</label>
-            <input 
-              type="date" 
-              className="input" 
-              value={returnDate} 
-              onChange={(e) => setReturnDate(e.target.value)} 
-              required 
-            />
-          </div>
+        <div className="input-group">
+          <label className="label">Invoice</label>
+          <select className="input" onChange={(e) => handleInvoiceChange(e.target.value)} required>
+            <option value="">Select Invoice</option>
+            {invoices.map(inv => <option key={inv.id} value={inv.id}>{inv.invoice_number} - {inv.customer_name}</option>)}
+          </select>
         </div>
-
         {selectedInvoice && (
-          <div className="animate-in">
-            <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Customer:</div>
-              <div style={{ fontWeight: '600', fontSize: '1.1rem', color: 'var(--primary)' }}>{selectedInvoice.customer_name}</div>
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px', display: 'flex', gap: '2rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'block', marginBottom: '0.2rem' }}>Customer Name</span>
+                <strong style={{ fontSize: '1.1rem' }}>{selectedInvoice.customer_name}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'block', marginBottom: '0.2rem' }}>Invoice Date</span>
+                <strong>{formatDate(selectedInvoice.date)}</strong>
+              </div>
             </div>
-
-            <div className="input-group" style={{ marginBottom: '1.5rem' }}>
-              <label className="label">Reason for Return</label>
-              <textarea 
-                className="input" 
-                rows="2" 
-                placeholder="Damaged goods, wrong item, etc."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              ></textarea>
-            </div>
-
-            <table style={{ marginBottom: '1.5rem' }}>
+            <table>
               <thead>
                 <tr>
                   <th>Product</th>
-                  <th style={{ width: '100px' }}>Sold Qty</th>
-                  <th style={{ width: '120px' }}>Return Qty</th>
-                  <th style={{ width: '120px' }}>Unit Price</th>
-                  <th style={{ width: '100px' }}>GST%</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th>Qty to Return</th>
+                  <th>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, idx) => (
                   <tr key={idx}>
-                    <td style={{ fontWeight: '500' }}>{item.product_name}</td>
-                    <td>{item.max_qty}</td>
                     <td>
-                      <input 
-                        type="number" 
-                        className="input" 
-                        value={item.return_qty} 
-                        onChange={(e) => handleQtyChange(idx, e.target.value)}
-                        step="0.01"
-                        min="0"
-                        max={item.max_qty}
-                      />
+                      <div style={{ fontWeight: '500' }}>{item.product_name}</div>
+                      {item.part_number && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.part_number}</div>}
                     </td>
-                    <td>₹{item.unit_price}</td>
-                    <td>{item.gst_rate}%</td>
-                    <td style={{ textAlign: 'right', fontWeight: '600' }}>
-                      ₹{(item.return_qty * item.unit_price).toLocaleString()}
+                    <td>
+                      <input type="number" className="input" value={item.return_qty} onChange={(e) => {
+                        const newItems = [...items];
+                        newItems[idx].return_qty = parseInt(e.target.value) || 0;
+                        setItems(newItems);
+                      }} />
                     </td>
+                    <td>₹{(item.return_qty * item.unit_price).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-              <div style={{ width: '300px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span className="text-muted">Subtotal:</span>
-                  <span>₹{totals.subtotal.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span className="text-muted">CGST:</span>
-                  <span>₹{totals.cgst.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span className="text-muted">SGST:</span>
-                  <span>₹{totals.sgst.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: '800', color: 'var(--primary)', marginTop: '1rem' }}>
-                  <span>Total Refund:</span>
-                  <span>₹{totals.total.toLocaleString()}</span>
-                </div>
-              </div>
+            <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+              <h3>Total Refund: ₹{totals.toLocaleString()}</h3>
             </div>
-
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={loading}>
-                <Save size={18} /> {loading ? 'Saving...' : 'Record Sales Return'}
-              </button>
-              <button type="button" onClick={onCancel} className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }}>
-                Discard
-              </button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
+              <button type="button" onClick={onCancel} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
             </div>
           </div>
         )}

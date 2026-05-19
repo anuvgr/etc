@@ -83,7 +83,6 @@ const Users = () => {
               </button>
               <button 
                 className="btn" 
-                className="btn" 
                 style={{ color: '#ef4444', padding: '0.4rem' }}
                 onClick={async () => {
                   if (window.confirm(`Delete user "${user.username}"?`)) {

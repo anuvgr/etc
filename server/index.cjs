@@ -19,6 +19,10 @@ app.use(cors());
 app.use(express.json());
 app.set('trust proxy', 1);
 
+// --- Serve React Frontend (Production) ---
+const distPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(distPath));
+
 // --- Logging Helper ---
 const logAction = (username, action, req) => {
   let ip = req.headers['x-client-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress;
@@ -227,17 +231,20 @@ app.get('/api/customers/:id/ledger', authenticateToken, (req, res) => {
            SELECT 0 as debit, amount as credit FROM payments WHERE customer_id = ? AND date < ?
            UNION ALL
            SELECT 0 as debit, amount as credit FROM bank_receipts WHERE customer_id = ? AND date < ?
+           UNION ALL
+           SELECT 0 as debit, total as credit FROM sales_returns WHERE customer_id = ? AND date < ?
          )
-       `).get(customerId, activeFY.start_date, customerId, activeFY.start_date, customerId, activeFY.start_date);
+       `).get(customerId, activeFY.start_date, customerId, activeFY.start_date, customerId, activeFY.start_date, customerId, activeFY.start_date);
        openingBalance = (prevTransactions.totalDebit || 0) - (prevTransactions.totalCredit || 0);
      }
 
-     let queryArgs = [customerId, customerId, customerId];
+     let queryArgs = [customerId, customerId, customerId, customerId];
      let dateFilter = '';
      if (activeFY) {
         dateFilter = ' AND date >= ? AND date <= ? ';
         queryArgs = [
           customerId, activeFY.start_date, activeFY.end_date, 
+          customerId, activeFY.start_date, activeFY.end_date,
           customerId, activeFY.start_date, activeFY.end_date,
           customerId, activeFY.start_date, activeFY.end_date
         ];
@@ -252,6 +259,9 @@ app.get('/api/customers/:id/ledger', authenticateToken, (req, res) => {
        UNION ALL
        SELECT date, 'Bank Receipt' as type, receipt_number as ref, 0 as debit, amount as credit
        FROM bank_receipts WHERE customer_id = ? ${dateFilter}
+       UNION ALL
+       SELECT date, 'Sales Return' as type, return_number as ref, 0 as debit, total as credit
+       FROM sales_returns WHERE customer_id = ? ${dateFilter}
        ORDER BY date ASC, type ASC
      `).all(...queryArgs);
 
@@ -406,7 +416,8 @@ app.get('/api/quotations', authenticateToken, (req, res) => {
   const { from, to } = req.query;
   const fy = getActiveFYRange();
   let sql = `
-    SELECT quotations.*, customers.name as customer_name, customers.phone as customer_phone
+    SELECT quotations.*, customers.name as customer_name, customers.phone as customer_phone,
+    (SELECT GROUP_CONCAT(products.name, ', ') FROM quotation_items JOIN products ON quotation_items.product_id = products.id WHERE quotation_id = quotations.id) as product_names
     FROM quotations 
     LEFT JOIN customers ON quotations.customer_id = customers.id
     WHERE date BETWEEN ? AND ?
@@ -563,9 +574,11 @@ app.get('/api/sales-returns', authenticateToken, (req, res) => {
   const { from, to } = req.query;
   let sql = `
     SELECT sales_returns.*, 
-           COALESCE(customers.name, inv_cust.name) as customer_name, 
-           COALESCE(customers.gstin, inv_cust.gstin) as customer_gstin,
-           invoices.invoice_number as original_invoice
+           COALESCE(NULLIF(customers.name, ''), NULLIF(customers.company_name, ''), NULLIF(inv_cust.name, ''), NULLIF(inv_cust.company_name, '')) as customer_name, 
+           COALESCE(NULLIF(customers.company_name, ''), NULLIF(inv_cust.company_name, '')) as company_name,
+           COALESCE(NULLIF(customers.gstin, ''), NULLIF(inv_cust.gstin, '')) as customer_gstin,
+           invoices.invoice_number as original_invoice,
+           (SELECT GROUP_CONCAT(products.name, ', ') FROM sales_return_items JOIN products ON sales_return_items.product_id = products.id WHERE sales_return_id = sales_returns.id) as product_names
     FROM sales_returns 
     LEFT JOIN customers ON sales_returns.customer_id = customers.id
     LEFT JOIN invoices ON sales_returns.invoice_id = invoices.id
@@ -648,9 +661,11 @@ app.get('/api/purchase-returns', authenticateToken, (req, res) => {
   const { from, to } = req.query;
   let sql = `
     SELECT purchase_returns.*, 
-           COALESCE(suppliers.name, pur_sup.name) as supplier_name, 
-           COALESCE(suppliers.gstin, pur_sup.gstin) as supplier_gstin,
-           purchases.purchase_number as original_bill
+           COALESCE(NULLIF(suppliers.name, ''), NULLIF(suppliers.company_name, ''), NULLIF(pur_sup.name, ''), NULLIF(pur_sup.company_name, '')) as supplier_name, 
+           COALESCE(NULLIF(suppliers.company_name, ''), NULLIF(pur_sup.company_name, '')) as supplier_company,
+           COALESCE(NULLIF(suppliers.gstin, ''), NULLIF(pur_sup.gstin, '')) as supplier_gstin,
+           purchases.purchase_number as original_bill,
+           (SELECT GROUP_CONCAT(products.name, ', ') FROM purchase_return_items JOIN products ON purchase_return_items.product_id = products.id WHERE purchase_return_id = purchase_returns.id) as product_names
     FROM purchase_returns 
     LEFT JOIN suppliers ON purchase_returns.supplier_id = suppliers.id
     LEFT JOIN purchases ON purchase_returns.purchase_id = purchases.id
@@ -907,6 +922,78 @@ app.put('/api/suppliers/:id', authenticateToken, (req, res) => {
     res.json({ message: 'Supplier updated successfully' });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/suppliers/:id/ledger', authenticateToken, (req, res) => {
+  const supplierId = req.params.id;
+  try {
+    const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(supplierId);
+    if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
+
+    let activeFY;
+    try {
+      activeFY = db.prepare('SELECT * FROM financial_years WHERE is_active = 1').get();
+    } catch(err) {}
+
+    let openingBalance = 0;
+    if (activeFY) {
+       const prevTransactions = db.prepare(`
+         SELECT SUM(debit) as totalDebit, SUM(credit) as totalCredit FROM (
+           SELECT 0 as debit, total as credit FROM purchases WHERE supplier_id = ? AND date < ?
+           UNION ALL
+           SELECT amount as debit, 0 as credit FROM bank_receipts WHERE supplier_id = ? AND date < ?
+           UNION ALL
+           SELECT total as debit, 0 as credit FROM purchase_returns WHERE supplier_id = ? AND date < ?
+         )
+       `).get(supplierId, activeFY.start_date, supplierId, activeFY.start_date, supplierId, activeFY.start_date);
+       openingBalance = (prevTransactions.totalCredit || 0) - (prevTransactions.totalDebit || 0); // Credit balance is positive (we owe them)
+     }
+
+     let queryArgs = [supplierId, supplierId, supplierId];
+     let dateFilter = '';
+     if (activeFY) {
+        dateFilter = ' AND date >= ? AND date <= ? ';
+        queryArgs = [
+          supplierId, activeFY.start_date, activeFY.end_date, 
+          supplierId, activeFY.start_date, activeFY.end_date,
+          supplierId, activeFY.start_date, activeFY.end_date
+        ];
+     }
+
+     const transactions = db.prepare(`
+       SELECT date, 'Purchase' as type, purchase_number as ref, 0 as debit, total as credit
+       FROM purchases WHERE supplier_id = ? ${dateFilter}
+       UNION ALL
+       SELECT date, 'Payment' as type, IFNULL(receipt_number, 'PAYMENT') as ref, amount as debit, 0 as credit
+       FROM bank_receipts WHERE supplier_id = ? ${dateFilter}
+       UNION ALL
+       SELECT date, 'Purchase Return' as type, return_number as ref, total as debit, 0 as credit
+       FROM purchase_returns WHERE supplier_id = ? ${dateFilter}
+       ORDER BY date ASC, type ASC
+     `).all(...queryArgs);
+
+    let balance = openingBalance;
+    const ledger = transactions.map(t => {
+      // Balance is how much we owe them (Credit - Debit)
+      balance += (t.credit - t.debit);
+      return { ...t, balance };
+    });
+
+    if (activeFY) {
+       ledger.unshift({
+          date: activeFY.start_date,
+          type: 'Opening Balance',
+          ref: '-',
+          debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+          credit: openingBalance > 0 ? openingBalance : 0,
+          balance: openingBalance
+       });
+    }
+
+    res.json({ supplier, ledger, closingBalance: balance });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1385,6 +1472,11 @@ app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
     totalProducts: products.total_products || 0,
     lowStock: lowStock.count || 0
   });
+});
+
+// --- Catch-all: Serve React App for any non-API route ---
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
 // --- Server Start ---

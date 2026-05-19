@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import client from '../api/client';
 import ReactDOM from 'react-dom';
-import { Users, Plus, Search, Mail, Phone, MapPin, Download, Upload, X, FileText, Printer, MessageCircle, Edit } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MapPin, Download, Upload, X, FileText, Printer, MessageCircle, Edit } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { formatDate } from '../utils/format';
 
@@ -32,6 +32,7 @@ const Customers = () => {
 
   const fetchCustomers = async () => {
     try {
+      setLoading(true);
       const { data } = await client.get('/customers');
       setCustomers(data);
     } catch (err) {
@@ -50,10 +51,10 @@ const Customers = () => {
         await client.post('/customers', formData);
       }
       setShowModal(false);
-      fetchCustomers();
       resetForm();
+      fetchCustomers();
     } catch (err) {
-      alert('Failed to save customer: ' + (err.response?.data?.error || err.message));
+      alert(err.response?.data?.error || 'Failed to save customer');
     }
   };
 
@@ -89,53 +90,6 @@ const Customers = () => {
       alert('Failed to load ledger: ' + (err.response?.data?.error || err.message));
       setShowLedgerModal(false);
     }
-  };
-
-  const handleDownloadPDF = () => {
-    const element = document.querySelector('.print-ledger');
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: `Statement_${selectedCustomer?.name}_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    // Temporarily hide the 'no-print' buttons for the PDF generation
-    const buttons = element.querySelector('.no-print');
-    if (buttons) buttons.style.display = 'none';
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      if (buttons) buttons.style.display = 'flex';
-    });
-  };
-
-  const handleWhatsappLedger = () => {
-    if (!ledgerData || !selectedCustomer) return;
-
-    let text = `*Statement of Accounts*\n`;
-    text += `Customer: *${selectedCustomer.name}*\n`;
-    if (selectedCustomer.company_name) text += `Company: ${selectedCustomer.company_name}\n`;
-    text += `--------------------------\n`;
-
-    ledgerData.ledger.forEach(tx => {
-      text += `${formatDate(tx.date)} | ${tx.type === 'Invoice' ? 'INV' : 'PAY'}: ${tx.ref}\n`;
-      if (tx.debit > 0) text += `Dr: ₹${tx.debit.toLocaleString()}\n`;
-      if (tx.credit > 0) text += `Cr: ₹${tx.credit.toLocaleString()}\n`;
-      text += `Bal: ₹${tx.balance.toLocaleString()}\n\n`;
-    });
-
-    text += `--------------------------\n`;
-    text += `*Closing Balance: ₹${ledgerData.closingBalance.toLocaleString()} ${ledgerData.closingBalance > 0 ? '(Dr)' : (ledgerData.closingBalance < 0 ? '(Cr)' : '')}*\n`;
-
-    const encodedText = encodeURIComponent(text);
-    const phone = selectedCustomer.phone ? selectedCustomer.phone.replace(/\\D/g, '') : '';
-    const url = phone ? `https://wa.me/91${phone}?text=${encodedText}` : `https://wa.me/?text=${encodedText}`;
-    window.open(url, '_blank');
-  };
-
-  const handlePrintLedger = () => {
-    window.print();
   };
 
   const handleExport = () => {
@@ -191,10 +145,10 @@ const Customers = () => {
             />
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-outline" onClick={handleExport} title="Export to Excel">
+            <button className="btn btn-outline" onClick={handleExport}>
               <Download size={18} /> Export
             </button>
-            <button className="btn btn-outline" onClick={() => fileInputRef.current.click()} title="Import from Excel">
+            <button className="btn btn-outline" onClick={() => fileInputRef.current.click()}>
               <Upload size={18} /> Import
             </button>
             <input
@@ -355,106 +309,46 @@ const Customers = () => {
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
         }}>
-          <style>{`
-            @media print {
-              body * { visibility: hidden; }
-              .print-ledger, .print-ledger * { visibility: visible; }
-              .print-ledger { position: absolute; left: 0; top: 0; width: 100%; max-width: none; color: black !important; background: white !important; box-shadow: none; max-height: none; overflow: visible; padding: 20px; }
-              .print-ledger table { width: 100%; border-collapse: collapse; color: black !important; background: white !important; border: 1px solid #000 !important; }
-              .print-ledger th { background: #eee !important; color: black !important; border: 1px solid #000 !important; font-weight: bold; }
-              .print-ledger td { border: 1px solid #000 !important; color: black !important; background: white !important; }
-              .print-ledger span { background: none !important; color: black !important; padding: 0 !important; font-weight: bold; }
-              .no-print { display: none !important; }
-            }
-          `}</style>
           <div className="card print-ledger" style={{
-            width: '100%',
-            maxWidth: '800px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            background: '#fff',
-            color: '#000'
+            width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', background: '#fff', color: '#000'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <img src="/logo.png" alt="Logo" className="print-only-logo" style={{ height: '60px', marginRight: '1rem', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
-                <div>
-                  <h2 style={{ marginBottom: '0.5rem' }}>Statement of Accounts</h2>
-                  <div className="text-muted" style={{ color: 'inherit' }}>Customer: <strong>{selectedCustomer?.name}</strong> {selectedCustomer?.company_name && `(${selectedCustomer.company_name})`}</div>
-                </div>
+              <div>
+                <h2 style={{ marginBottom: '0.5rem' }}>Statement of Accounts</h2>
+                <div className="text-muted" style={{ color: 'inherit' }}>Customer: <strong>{selectedCustomer?.name}</strong> {selectedCustomer?.company_name && `(${selectedCustomer.company_name})`}</div>
               </div>
-              <div className="no-print" style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="btn btn-outline" onClick={handlePrintLedger} title="Print Statement" style={{ color: '#000', borderColor: '#ccc' }}>
-                  <Printer size={18} /> Print
-                </button>
-                <button className="btn btn-outline" onClick={handleDownloadPDF} title="Save as PDF" style={{ color: '#000', borderColor: '#ccc' }}>
-                  <FileText size={18} /> PDF
-                </button>
-                <button className="btn btn-outline" onClick={handleWhatsappLedger} title="Share via WhatsApp" style={{ color: '#25D366', borderColor: 'rgba(37,211,102,0.5)' }}>
-                  <MessageCircle size={18} /> WhatsApp
-                </button>
-                <button className="btn btn-outline" onClick={() => setShowLedgerModal(false)} style={{ padding: '0.5rem', marginLeft: '1rem', color: '#000', borderColor: '#ccc' }}>
-                  <X size={20} />
-                </button>
-              </div>
+              <button className="btn btn-outline" onClick={() => setShowLedgerModal(false)} style={{ color: '#000', borderColor: '#ccc' }}>
+                <X size={20} />
+              </button>
             </div>
 
             {!ledgerData ? (
               <div style={{ textAlign: 'center', padding: '3rem' }} className="text-muted">Loading ledger data...</div>
-            ) : ledgerData.ledger.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem' }} className="text-muted">No transactions found for this customer.</div>
             ) : (
-              <>
-                <table style={{ marginBottom: '1.5rem', color: '#000', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f1f5f9' }}>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Date</th>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Type</th>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Ref/Details</th>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Debit (₹)</th>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Credit (₹)</th>
-                      <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Balance (₹)</th>
+              <table style={{ marginBottom: '1.5rem', color: '#000', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Date</th>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Type</th>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0' }}>Ref</th>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Debit</th>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Credit</th>
+                    <th style={{ color: '#475569', border: '1px solid #e2e8f0', textAlign: 'right' }}>Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerData.ledger.map((tx, idx) => (
+                    <tr key={idx}>
+                      <td style={{ border: '1px solid #e2e8f0' }}>{formatDate(tx.date)}</td>
+                      <td style={{ border: '1px solid #e2e8f0' }}>{tx.type}</td>
+                      <td style={{ border: '1px solid #e2e8f0' }}>{tx.ref}</td>
+                      <td style={{ textAlign: 'right', border: '1px solid #e2e8f0' }}>{tx.debit.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', border: '1px solid #e2e8f0' }}>{tx.credit.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', border: '1px solid #e2e8f0' }}>{tx.balance.toLocaleString()}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {ledgerData.ledger.map((tx, idx) => (
-                      <tr key={idx}>
-                        <td style={{ border: '1px solid #e2e8f0' }}>{formatDate(tx.date)}</td>
-                        <td style={{ border: '1px solid #e2e8f0' }}>
-                          <span style={{
-                            padding: '0.2rem 0.5rem',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            background: tx.type === 'Invoice' ? '#fee2e2' : '#d1fae5',
-                            color: tx.type === 'Invoice' ? '#b91c1c' : '#047857',
-                            fontWeight: '600'
-                          }}>
-                            {tx.type}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: '500', border: '1px solid #e2e8f0' }}>{tx.ref}</td>
-                        <td style={{ textAlign: 'right', color: tx.debit > 0 ? '#b91c1c' : 'inherit', border: '1px solid #e2e8f0' }}>
-                          {tx.debit > 0 ? tx.debit.toLocaleString() : '-'}
-                        </td>
-                        <td style={{ textAlign: 'right', color: tx.credit > 0 ? '#047857' : 'inherit', border: '1px solid #e2e8f0' }}>
-                          {tx.credit > 0 ? tx.credit.toLocaleString() : '-'}
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', border: '1px solid #e2e8f0' }}>
-                          {tx.balance.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <td colSpan="5" style={{ textAlign: 'right', fontWeight: 'bold', padding: '1rem', border: '1px solid #e2e8f0' }}>Closing Balance:</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', padding: '1rem', border: '1px solid #e2e8f0', color: ledgerData.closingBalance > 0 ? '#b91c1c' : (ledgerData.closingBalance < 0 ? '#047857' : 'inherit') }}>
-                        ₹{ledgerData.closingBalance.toLocaleString()} {ledgerData.closingBalance > 0 ? '(Dr)' : (ledgerData.closingBalance < 0 ? '(Cr)' : '')}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>,

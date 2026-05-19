@@ -4,8 +4,8 @@ import ReactDOM from 'react-dom';
 import { formatDate } from '../utils/format';
 import { Search, ChevronRight, ArrowLeft, Plus, CreditCard, X, CheckCircle, Printer } from 'lucide-react';
 
-export default function CustomerLedgerTab() {
-  const [customers, setCustomers] = useState([]);
+export default function SupplierLedgerTab() {
+  const [suppliers, setsuppliers] = useState([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [ledger, setLedger] = useState(null);
@@ -13,34 +13,29 @@ export default function CustomerLedgerTab() {
   const [showPayment, setShowPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [invoices, setInvoices] = useState([]);
-  const [paymentForm, setPaymentForm] = useState({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cash', reference_no: '', notes: '', invoice_id: '' });
+  const [paymentForm, setPaymentForm] = useState({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cash', reference_no: '', notes: '' });
   const [receiptForm, setReceiptForm] = useState({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cheque', bank_name: '', cheque_number: '', reference_no: '', narration: '', status: 'Cleared' });
 
-  useEffect(() => { fetchCustomers(); }, []);
+  useEffect(() => { fetchsuppliers(); }, []);
 
-  const fetchCustomers = async () => {
+  const fetchsuppliers = async () => {
     try {
-      const { data } = await client.get('/customers');
-      setCustomers(data);
+      const { data } = await client.get('/suppliers');
+      setsuppliers(data);
     } catch (e) { console.error(e); }
   };
 
-  const openCustomer = async (c) => {
+  const openSupplier = async (c) => {
     setSelected(c);
     setLoading(true);
     try {
-      const [ledgerRes, invRes] = await Promise.all([
-        client.get(`/customers/${c.id}/ledger`),
-        client.get('/invoices', { params: { all: 'true' } })
-      ]);
-      setLedger(ledgerRes.data);
-      setInvoices(invRes.data.filter(i => String(i.customer_id) === String(c.id) && i.status !== 'Paid'));
+      const { data } = await client.get(`/suppliers/${c.id}/ledger`);
+      setLedger(data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
-  const filtered = customers.filter(c =>
+  const filtered = suppliers.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.company_name || '').toLowerCase().includes(search.toLowerCase())
   );
@@ -49,22 +44,25 @@ export default function CustomerLedgerTab() {
     e.preventDefault();
     setSaving(true);
     try {
-      await client.post('/payments', { ...paymentForm, customer_id: selected.id });
+      // Payments to suppliers are tracked via bank_receipts with supplier_id
+      await client.post('/bank-receipts', { ...paymentForm, party_name: selected.name, party_type: 'Supplier', supplier_id: selected.id });
       setShowPayment(false);
-      setPaymentForm({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cash', reference_no: '', notes: '', invoice_id: '' });
-      openCustomer(selected);
+      setPaymentForm({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cash', reference_no: '', notes: '' });
+      openSupplier(selected);
     } catch (err) { alert('Save failed'); }
     finally { setSaving(false); }
   };
 
   const handleSaveReceipt = async (e) => {
+    // A receipt from a supplier? Usually it's just payments to them, but we'll allow it as a negative amount if needed, 
+    // or just use the same bank_receipts endpoint.
     e.preventDefault();
     setSaving(true);
     try {
-      await client.post('/bank-receipts', { ...receiptForm, party_name: selected.name, party_type: 'Customer', customer_id: selected.id });
+      await client.post('/bank-receipts', { ...receiptForm, party_name: selected.name, party_type: 'Supplier', supplier_id: selected.id });
       setShowReceipt(false);
       setReceiptForm({ date: new Date().toISOString().split('T')[0], amount: '', payment_mode: 'Cheque', bank_name: '', cheque_number: '', reference_no: '', narration: '', status: 'Cleared' });
-      openCustomer(selected);
+      openSupplier(selected);
     } catch (err) { alert('Save failed'); }
     finally { setSaving(false); }
   };
@@ -87,7 +85,7 @@ export default function CustomerLedgerTab() {
             <button className="btn btn-outline" onClick={() => setShowReceipt(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <CreditCard size={16} /> Add Receipt
             </button>
-            <button className="btn btn-primary" onClick={() => window.open(`/print/ledger/${selected.id}`, '_blank')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button className="btn btn-primary" onClick={() => window.open(`/print/supplier-ledger/${selected.id}`, '_blank')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Printer size={16} /> Print / Save PDF
             </button>
           </div>
@@ -153,25 +151,6 @@ export default function CustomerLedgerTab() {
             <h2>Record Payment</h2>
             <form onSubmit={handleSavePayment}>
               <div className="input-group">
-                <label className="label">Invoice</label>
-                <select className="input" required value={paymentForm.invoice_id} onChange={(e) => {
-                  const invId = e.target.value;
-                  const inv = invoices.find(i => String(i.id) === String(invId));
-                  setPaymentForm({
-                    ...paymentForm, 
-                    invoice_id: invId,
-                    amount: inv ? inv.total : ''
-                  });
-                }}>
-                  <option value="">Select Invoice</option>
-                  {invoices.map(inv => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} (₹{inv.total.toLocaleString()} - {inv.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="input-group">
                 <label className="label">Date</label>
                 <input type="date" className="input" required value={paymentForm.date} onChange={e => setPaymentForm({...paymentForm, date: e.target.value})} />
               </div>
@@ -235,15 +214,15 @@ export default function CustomerLedgerTab() {
 
   return (
     <div>
-      <input type="text" className="input" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)} />
+      <input type="text" className="input" placeholder="Search suppliers..." value={search} onChange={e => setSearch(e.target.value)} />
       <div className="card glass" style={{ marginTop: '1rem' }}>
         <table>
           <thead>
-            <tr><th>Customer</th><th>Company</th><th>Actions</th></tr>
+            <tr><th>Supplier</th><th>Company</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {filtered.map(c => (
-              <tr key={c.id} onClick={() => openCustomer(c)} style={{ cursor: 'pointer' }}>
+              <tr key={c.id} onClick={() => openSupplier(c)} style={{ cursor: 'pointer' }}>
                 <td>{c.name}</td>
                 <td>{c.company_name}</td>
                 <td><ChevronRight size={16} /></td>

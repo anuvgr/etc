@@ -31,7 +31,8 @@ import { ThemeProvider } from './context/ThemeContext';
 
 const ProtectedRoute = ({ children, useLayout = true }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ color: 'white', padding: '2rem' }}>Loading session...</div>;
+  if (loading) return <div className="p-8 text-center text-muted">Loading...</div>;
+  if (!user) return <Navigate to="/login" />;
   if (!user) return <Navigate to="/login" />;
   
   if (!useLayout) return <div className="animate-in">{children}</div>;

@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "server": "node server/index.cjs",
-    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "start": "node server/index.cjs",
     "build": "vite build",
+    "build:start": "vite build && node server/index.cjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -37,6 +38,7 @@
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "firebase-tools": "^13.31.2",
     "globals": "^17.5.0",
     "vite": "^8.0.10"
   }

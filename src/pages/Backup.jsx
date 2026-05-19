@@ -73,6 +73,7 @@ const Backup = () => {
     }
   };
 
+
   const handleReset = async () => {
     if (!window.confirm(`CRITICAL WARNING: This will PERMANENTLY DELETE all ${resetType}. This action cannot be undone. Proceed?`)) return;
     setLoading(true);
@@ -137,7 +138,7 @@ const Backup = () => {
           <h3>System Maintenance</h3>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
           {/* Full Backup */}
           <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
