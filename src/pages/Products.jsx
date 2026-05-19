@@ -107,8 +107,25 @@ const Products = () => {
           ))}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-outline" onClick={handleExport}>Export</button>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>Add {activeTab}</button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".xlsx, .xls, .csv"
+            onChange={handleImport}
+          />
+          <button className="btn btn-outline" onClick={() => fileInputRef.current.click()} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Upload size={16} />
+            <span>Import</span>
+          </button>
+          <button className="btn btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Download size={16} />
+            <span>Export</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Plus size={16} />
+            <span>Add {activeTab}</span>
+          </button>
         </div>
       </div>
 
@@ -172,7 +189,39 @@ const Products = () => {
                   <input type="number" className="input" required value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="input-group">
+                  <label className="label">Unit</label>
+                  <select className="input" value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})}>
+                    <option value="Nos">Nos</option>
+                    <option value="Sets">Sets</option>
+                    <option value="Mtrs">Mtrs</option>
+                    <option value="Kgs">Kgs</option>
+                    <option value="Box">Box</option>
+                  </select>
+                </div>
+                <div className="input-group">
+                  <label className="label">Tax Rate (%)</label>
+                  <select className="input" value={formData.tax_rate} onChange={(e) => setFormData({...formData, tax_rate: parseInt(e.target.value)})}>
+                    <option value="18">18%</option>
+                    <option value="28">28%</option>
+                    <option value="12">12%</option>
+                    <option value="5">5%</option>
+                    <option value="0">0%</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="input-group">
+                  <label className="label">Purchase Price</label>
+                  <input type="number" step="any" className="input" required value={formData.purchase_price} onChange={(e) => setFormData({...formData, purchase_price: parseFloat(e.target.value) || ''})} />
+                </div>
+                <div className="input-group">
+                  <label className="label">Sales Price</label>
+                  <input type="number" step="any" className="input" required value={formData.sales_price} onChange={(e) => setFormData({...formData, sales_price: parseFloat(e.target.value) || ''})} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)} style={{ flex: 1 }}>Cancel</button>
               </div>
