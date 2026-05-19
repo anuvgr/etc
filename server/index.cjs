@@ -1474,8 +1474,8 @@ app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
   });
 });
 
-// --- Catch-all: Serve React App for any non-API route ---
-app.get('*', (req, res) => {
+// --- Catch-all: Serve React App for any non-API route (Express 5 syntax) ---
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
